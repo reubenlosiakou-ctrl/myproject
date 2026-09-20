@@ -1,0 +1,4 @@
+[build]
+  base = "HSA_ZIP/extracted/wapoalive-netlify-dist"
+  publish = "."
+  functions = "netlify/functions"
