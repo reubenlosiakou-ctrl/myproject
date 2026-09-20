@@ -1,4 +1,19 @@
 [build]
-  base = "HSA_ZIP/extracted/wapoalive-netlify-dist"
   publish = "."
   functions = "netlify/functions"
+
+[functions]
+  directory = "netlify/functions"
+
+# Usirudishe functions kama index.html
+[[redirects]]
+  from = "/.netlify/functions/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false
