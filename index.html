@@ -7,18 +7,16 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0a0a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif;padding-bottom:80px}
+body{background:#0a0a0a;color:#fff;font-family:sans-serif;padding-bottom:80px}
 .header{position:sticky;top:0;z-index:50;background:#000;border-bottom:2px solid #ff2e88;padding:12px 15px;display:flex;justify-content:space-between;align-items:center}
 .logo{font-weight:900;font-size:20px;color:#ff2e88}
-.online-dot{width:8px;height:8px;background:#00ff88;border-radius:50%;display:inline-block;animation:blink 1s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 .card{background:#161616;border:1px solid #222;border-radius:20px;margin:12px;padding:14px}
 .btn{width:100%;padding:14px;border-radius:30px;border:none;font-weight:800;cursor:pointer}
 .btn-pink{background:linear-gradient(135deg,#ff2e88,#ff006a);color:#fff}
 .btn-dark{background:#222;color:#fff;border:1px solid #333}
 .pill{display:inline-block;padding:6px 12px;border-radius:20px;font-size:11px;margin:3px;background:#222;border:1px solid #333}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px}
-.grid3 img{width:100%;height:90px;object-fit:cover;border-radius:12px;border:1px solid #333}
+.grid3 img{width:100%;height:90px;object-fit:cover;border-radius:12px}
 .toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid #ff2e88;padding:12px 20px;border-radius:30px;z-index:9999;display:none}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
 .modal-box{background:#161616;border:1px solid #333;border-radius:20px;padding:20px;width:100%;max-width:380px}
@@ -26,170 +24,44 @@ input{width:100%;padding:12px;border-radius:12px;border:1px solid #333;backgroun
 </style>
 </head>
 <body>
-
 <div id="toast" class="toast"></div>
+<div class="header"><div class="logo">🌹 WapoaLive.co.ke</div><div><span style="width:8px;height:8px;background:#00ff88;border-radius:50%;display:inline-block"></span> LIVE</div></div>
 
-<div class="header">
-<div class="logo">🌹 WapoaLive.co.ke</div>
-<div><span class="online-dot"></span> <span style="font-size:11px" id="live-count">1,243 LIVE</span></div>
-</div>
+<div class="card"><h3>🔥 WapoaLive Kapenguria</h3><p style="font-size:12px;opacity:.6;margin-top:6px">Wasichana wa Kapenguria LIVE • Chat 100 KES • Maua 100 KES</p></div>
 
 <div class="card">
-<h3 style="font-size:14px;margin-bottom:8px">🔥 WapoaLive Kapenguria</h3>
-<div style="font-size:12px;opacity:.7">Wasichana wa Kapenguria LIVE • Verify • Chat 100 KES • Maua 100 KES</div>
-<div style="margin-top:10px">
-<span class="pill">✅ Verify - Green Tick</span>
-<span class="pill">🌹 Leaderboard</span>
-<span class="pill">🎙️ Voice 15s</span>
-<span class="pill">🎮 Game</span>
-<span class="pill" style="background:red">🚨 SOS</span>
-</div>
+<div style="display:flex;gap:12px"><img src="https://i.pravatar.cc/200?img=5" style="width:70px;height:70px;border-radius:50%;border:2px solid #ff2e88"><div><h2>Achieng Atieno</h2><p style="font-size:11px;color:#00ff88">Kapenguria • 0.6km • ONLINE</p></div></div>
+<button class="btn btn-pink" style="margin-top:14px" onclick="openPay('chat','Chat',100)">💬 Fungua Chat - 100 KES</button>
+<button class="btn btn-dark" style="margin-top:8px" onclick="openGift()">🌹 Tuma Maua - 100 KES</button>
 </div>
 
-<div class="card" id="profile-card">
-<div style="display:flex;gap:12px">
-<img id="p-img" src="https://i.pravatar.cc/200?img=5" style="width:70px;height:70px;border-radius:50%;border:2px solid #ff2e88">
-<div>
-<h2 id="p-name" style="font-size:18px">Achieng Atieno</h2>
-<p style="font-size:11px;color:#00ff88">Kapenguria • 0.6km • ONLINE • Age: 18</p>
-<p style="font-size:11px;opacity:.6;margin-top:4px">Bio + Pics + Video FREE • Chat ndio inalipishwa</p>
-</div>
-</div>
+<div class="card"><h4>🏆 Top Gifters Leo</h4><div id="gift-list" style="font-size:12px;opacity:.7;margin-top:8px">Bado hakuna - kuwa wa kwanza! 🌹</div></div>
 
-<h4 style="margin:12px 0 6px">📸 Picha</h4>
-<div class="grid3">
-<img src="https://i.pravatar.cc/200?img=5"><img src="https://i.pravatar.cc/200?img=6"><img src="https://i.pravatar.cc/200?img=7">
-</div>
+<div class="modal" id="pay-modal"><div class="modal-box"><h3 id="pay-title">Lipa na M-Pesa</h3><input id="pay-phone" placeholder="07xxxxxxxx" type="tel"><input id="pay-name" placeholder="Jina lako"><button class="btn btn-pink" onclick="payNow()">Lipa Sasa - STK</button><button class="btn btn-dark" style="margin-top:8px" onclick="closeM()">Ghairi</button></div></div>
 
-<h4 style="margin:12px 0 6px">🎥 Video</h4>
-<video controls style="width:100%;border-radius:12px"><source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4"></video>
-
-<button class="btn btn-pink" style="margin-top:14px" onclick="openPay('chat')">💬 Fungua Chat na Achieng - 100 KES</button>
-<button class="btn btn-dark" style="margin-top:8px" onclick="openGiftModal()">🌹 Tuma Maua - 100 KES</button>
-</div>
-
-<div class="card">
-<h4>🏆 Top Gifters Leo</h4>
-<div id="gift-list" style="font-size:12px;opacity:.7;margin-top:8px">Inapakia gifts...</div>
-</div>
-
-<!-- PAY MODAL -->
-<div class="modal" id="pay-modal">
-<div class="modal-box">
-<h3 id="pay-title">Lipa na M-Pesa</h3>
-<input id="pay-phone" placeholder="07xxxxxxxx" type="tel" value="07">
-<input id="pay-name" placeholder="Jina lako" value="Customer">
-<button class="btn btn-pink" onclick="payNow()">Lipa Sasa - STK itatumwa</button>
-<button class="btn btn-dark" style="margin-top:8px" onclick="closeModals()">Ghairi</button>
-<p style="font-size:10px;opacity:.5;margin-top:10px;text-align:center">STK Push kutoka PayHero • Salama 100%</p>
-</div>
-</div>
-
-<!-- GIFT MODAL -->
-<div class="modal" id="gift-modal">
-<div class="modal-box">
-<h3>Chagua Maua 🌹</h3>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
-<button class="btn btn-dark" onclick="selectGift('Rose Moja',100)">🌹 x1 - 100</button>
-<button class="btn btn-dark" onclick="selectGift('Rose 5',400)">🌹 x5 - 400</button>
-<button class="btn btn-dark" onclick="selectGift('Rose 10',800)">🌹 x10 - 800</button>
-<button class="btn btn-dark" onclick="selectGift('Bouquet',1500)">💐 Bouquet - 1500</button>
-</div>
-<button class="btn btn-dark" style="margin-top:10px" onclick="closeModals()">Funga</button>
-</div>
-</div>
-
-<div style="position:fixed;bottom:0;left:0;right:0;background:#000;border-top:1px solid #222;padding:8px;text-align:center;font-size:10px">
-⚡ <span style="color:#00ff88">Supabase Connected</span> • <span style="color:#ff2e88">PayHero Live</span> • wapoalive.co.ke
-</div>
+<div class="modal" id="gift-modal"><div class="modal-box"><h3>Chagua Maua 🌹</h3><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px"><button class="btn btn-dark" onclick="openPay('gift','Rose Moja',100)">🌹 x1 - 100</button><button class="btn btn-dark" onclick="openPay('gift','Rose 5',400)">🌹 x5 - 400</button><button class="btn btn-dark" onclick="openPay('gift','Rose 10',800)">🌹 x10 - 800</button><button class="btn btn-dark" onclick="openPay('gift','Bouquet',1500)">💐 1500</button></div><button class="btn btn-dark" style="margin-top:10px" onclick="closeM()">Funga</button></div></div>
 
 <script>
-const SUPA_URL = 'https://YOUR_SUPABASE_URL.supabase.co';
-const SUPA_KEY = 'YOUR_SUPABASE_ANON_KEY';
-const s = window.supabase.createClient(SUPA_URL, SUPA_KEY);
-
-let currentProfile = {id:'demo-profile-id', name:'Achieng'};
-let payTarget = {type:'chat', amount:100, giftName:'Chat'};
-
-window.showToast = (m) => {
-  const t = document.getElementById('toast');
-  t.textContent = m; t.style.display='block';
-  setTimeout(()=>t.style.display='none',3000);
-};
-
-function openPay(type){
-  payTarget.type = type;
-  payTarget.amount = 100;
-  document.getElementById('pay-title').innerText = type==='chat' ? 'Fungua Chat - 100 KES' : `Tuma ${payTarget.giftName} - ${payTarget.amount} KES`;
-  document.getElementById('pay-modal').style.display='flex';
-}
-function openGiftModal(){ document.getElementById('gift-modal').style.display='flex'; }
-function selectGift(name, amount){
-  payTarget = {type:'gift', giftName:name, amount};
-  closeModals(); openPay('gift');
-}
-function closeModals(){
-  document.getElementById('pay-modal').style.display='none';
-  document.getElementById('gift-modal').style.display='none';
-}
-
+const SUPA_URL='https://YOUR_SUPABASE_URL.supabase.co';
+const SUPA_KEY='YOUR_SUPABASE_ANON_KEY';
+let s=null; try{s=window.supabase.createClient(SUPA_URL,SUPA_KEY);}catch(e){}
+let payTarget={type:'chat',giftName:'Chat',amount:100};
+function showToast(m){let t=document.getElementById('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',3000);}
+function openPay(type,name,amount){payTarget={type,giftName:name,amount};document.getElementById('pay-title').innerText=`${name} - ${amount} KES`;document.getElementById('pay-modal').style.display='flex';}
+function openGift(){document.getElementById('gift-modal').style.display='flex';}
+function closeM(){document.getElementById('pay-modal').style.display='none';document.getElementById('gift-modal').style.display='none';}
 async function payNow(){
-  let phone = document.getElementById('pay-phone').value.trim();
-  let name = document.getElementById('pay-name').value.trim() || 'Customer';
-  if(!phone || phone.length<10){ showToast('Weka namba sahihi'); return; }
-  if(phone.startsWith('0')) phone = '254'+phone.substring(1);
-  if(phone.startsWith('+')) phone = phone.substring(1);
-
+  let phone=document.getElementById('pay-phone').value.trim();
+  if(!phone||phone.length<10){showToast('Weka namba sahihi');return;}
+  if(phone.startsWith('0')) phone='254'+phone.substring(1);
+  if(phone.startsWith('+')) phone=phone.substring(1);
   showToast(`Inatuma STK ya ${payTarget.amount} kwa ${phone}...`);
-  
   try{
-    const res = await fetch('/.netlify/functions/pay',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({amount:payTarget.amount, phone_number:phone, external_reference:`WPL-${Date.now()}`, name})
-    });
-    const data = await res.json();
-    console.log('PAY RES', data);
+    await fetch('/.netlify/functions/pay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:payTarget.amount,phone_number:phone,external_reference:`WPL-${Date.now()}`})});
     showToast('✅ STK imetumwa! Lipa kwa simu');
-
-    // FIX 1: Auto-save gift after payment request (hata kama ni demo)
-    if(payTarget.type==='gift'){
-      try{
-        const prof = JSON.parse(localStorage.getItem('wpl_profile') || '{}');
-        await s.from('gifts').insert({
-          sender_id: prof.id || '00000000-0000-0000-0000-000000000000',
-          receiver_id: currentProfile.id,
-          gift_name: payTarget.giftName,
-          amount: payTarget.amount
-        });
-      }catch(e){ console.log('gift save skip', e); }
-    }
-
-    // FIX 2: Fungua chat baada ya kulipa
-    if(payTarget.type==='chat'){
-      setTimeout(()=>{ showToast('💬 Chat imefunguliwa!'); },2000);
-    }
-
-  }catch(e){
-    console.error(e);
-    showToast('DEMO: STK ya '+payTarget.amount+' ingetumwa kwa '+phone);
-  }
-  closeModals();
+  }catch(e){showToast('DEMO: STK ya '+payTarget.amount+' ingetumwa');}
+  closeM();
 }
-
-// Load gifts
-(async ()=>{
-  try{
-    const {data:g} = await s.from('gifts').select('*').order('created_at',{ascending:false}).limit(10);
-    if(g && g.length){
-      document.getElementById('gift-list').innerHTML = g.map(x=>`🌹 ${x.gift_name||'Rose'} - ${x.amount} KES`).join('<br>');
-    }else{
-      document.getElementById('gift-list').innerHTML = 'Bado hakuna zawadi leo - kuwa wa kwanza! 🌹';
-    }
-  }catch(e){
-    document.getElementById('gift-list').innerHTML = 'Gifts zitaonekana hapa baada ya malipo';
-  }
-})();
 </script>
 </body>
 </html>
