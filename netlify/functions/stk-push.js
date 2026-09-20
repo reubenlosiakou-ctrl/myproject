@@ -1,24 +1,25 @@
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 exports.handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
+  }
   try {
-    const { phone, amount, reference } = JSON.parse(event.body);
-    await fetch(`${SUPABASE_URL}/rest/v1/payments`, {
-      method: 'POST',
-      headers: {
-        'apikey': SERVICE_KEY,
-        'Authorization': `Bearer ${SERVICE_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ phone, amount, reference, status: 'pending' })
-    });
-    const auth = Buffer.from(`${process.env.PAYHERO_USERNAME}:${process.env.PAYHERO_PASSWORD}`).toString('base64');
+    const { amount, phone, reference } = JSON.parse(event.body);
+    const username = process.env.PAYHERO_API_USERNAME;
+    const password = process.env.PAYHERO_API_PASSWORD;
+    const channelId = process.env.PAYHERO_CHANNEL_ID;
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    let formattedPhone = phone;
+    if (phone.startsWith('0')) formattedPhone = '254' + phone.substring(1);
+    if (phone.startsWith('+')) formattedPhone = phone.substring(1);
     const res = await fetch('https://backend.payhero.co.ke/api/v2/payments', {
       method: 'POST',
-      headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${auth}` },
       body: JSON.stringify({
-        amount, phone_number: phone, channel_id: parseInt(process.env.PAYHERO_CHANNEL_ID),
-        provider: 'm-pesa', external_reference: reference,
+        amount: Number(amount),
+        phone_number: formattedPhone,
+        channel_id: Number(channelId),
+        provider: 'm-pesa',
+        external_reference: reference,
         callback_url: `https://${process.env.URL}/.netlify/functions/callback`
       })
     });
