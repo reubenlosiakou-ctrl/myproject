@@ -383,9 +383,14 @@
 <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent, rgba(0,0,0,.9));padding:16px;z-index:10"><div style="text-align:center;color:#22c55e;font-size:10px;margin-bottom:10px" id="liveInfoText">🔒 Automatic - mtaonana!</div><div style="display:flex;gap:12px;justify-content:center"><button onclick="leavePrivateLive()" style="background:#ef4444;border:0;color:#fff;width:56px;height:56px;border-radius:50%;font-size:20px">📞</button><button id="micBtnLive" onclick="toggleMic()" style="background:rgba(255,255,255,.2);border:0;color:#fff;width:48px;height:48px;border-radius:50%">🎤</button><button id="camBtnLive" onclick="toggleCam()" style="background:rgba(255,255,255,.2);border:0;color:#fff;width:48px;height:48px;border-radius:50%">📷</button></div></div>
 </div>
 <script>
-const PAYHERO_USERNAME='9KPoej3ehUBaHueC3g6M';
-const PAYHERO_PASSWORD='eU80VKRwLz6SGpUD1f7PPbCUK1vMgDCwQ6nbsGls';
-const PAYHERO_CHANNEL_ID=12697;
+// Bug fix + security fix: PayHero credentials used to be hardcoded here,
+// visible to anyone who viewed page source, AND pay100() called PayHero's
+// API directly from the browser - which browsers block via CORS since
+// PayHero isn't a browser-facing API, so the 100 KES chat-unlock payment
+// could never actually succeed. Both are fixed below: credentials now stay
+// server-side only (in the Netlify function's env vars), and pay100() goes
+// through /.netlify/functions/pay and /.netlify/functions/check-status
+// instead of calling PayHero directly.
 
 // ====== WAPOA SECURE - ONE FILE - FIXED WITHOUT CHANGING ANYTHING - LAYOUT ILE ILE ======
 const esc = s => String(s||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -399,7 +404,19 @@ function securePeerId(){ return 'w_'+crypto.randomUUID().replace(/-/g,'').slice(
 let lastMsgTime=0;
 function canSend(){ let now=Date.now(); if(now-lastMsgTime<800) return false; lastMsgTime=now; return true; }
 
-let peer=null,localStream=null,myCall=null,currentProfile=null,liveInterval=null,liveSeconds=0,micOn=true,camOn=true,myMedia={photos:[],videos:[],bio:''},privateLiveSeconds=0,privateLiveTimer=null;
+let peer=null,localStream=null,myCall=null,liveInterval=null,liveSeconds=0,micOn=true,camOn=true,myMedia={photos:[],videos:[],bio:''},privateLiveSeconds=0,privateLiveTimer=null;
+// Bug fix: `currentProfile` used to be declared with `let`, which does NOT
+// become a `window` property in a classic script. A later patch
+// (window.openProfile, "FIX UNDEFINED PROFILE") writes to
+// `window.currentProfile` instead - so tapping a profile card set a
+// *different* variable than the one openChatPay(), isPaidForCurrent(),
+// loadChatHistory() etc. all check. Result: "Fungua Chat" silently did
+// nothing, because the plain `currentProfile` it checked was never set.
+// Declaring with `var` here makes it a real `window.currentProfile`
+// property AND the plain identifier at the same time, so every old and
+// new reference in this file - bare or window.-prefixed - now reads and
+// writes the exact same value.
+var currentProfile=null;
 let voiceCallTimer=null,voiceSeconds=0,voicePeer=null,voiceStream=null;
 function getPaidChats(){return JSON.parse(localStorage.getItem('wapoa_paid_chats')||'{}');}
 function isPaidForCurrent(){if(!currentProfile)return false;return getPaidChats()[currentProfile.name]===true;}
@@ -421,8 +438,12 @@ async function pay100(){
   btn.disabled=true;btn.innerText='⏳ Inatuma STK...';
   statusEl.innerText='⏳ Inatuma STK kwa +'+phone+' - 100 KES...';statusEl.style.color='#aaa';
   try{
-    const auth=btoa(PAYHERO_USERNAME+":"+PAYHERO_PASSWORD);
-    const res=await fetch("https://backend.payhero.co.ke/api/v2/payments",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Basic "+auth},body:JSON.stringify({amount:100,phone_number:phone,channel_id:PAYHERO_CHANNEL_ID,provider:"m-pesa",external_reference:reference,callback_url:"https://wapoalive.netlify.app/.netlify/functions/callback"})});
+    let res;
+    try{
+      res=await fetch('/.netlify/functions/pay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount:100,phone_number:phone,external_reference:reference})});
+    }catch(networkErr){
+      statusEl.innerText='❌ Haikuweza kufikia server. Angalia internet yako.';statusEl.style.color='#ef4444';btn.disabled=false;btn.innerText='💖 Lipa 100 KES';return;
+    }
     const txt=await res.text();
     if(!res.ok){statusEl.innerText='❌ '+txt.substring(0,250);statusEl.style.color='#ef4444';btn.disabled=false;btn.innerText='💖 Lipa 100 KES';return;}
     statusEl.innerText='✅ STK IMETUMWA! Weka PIN kwa simu!';statusEl.style.color='#22c55e';btn.innerText='⏳ Subiri PIN...';
@@ -431,7 +452,7 @@ async function pay100(){
       tries++;
       statusEl.innerText=`⏳ Inasubiri malipo... (${tries*3}s) - Ukishalipa bonyeza FUNGUA`;
       try{
-        const r=await fetch(`https://backend.payhero.co.ke/api/v2/transaction-status?external_reference=${reference}`,{headers:{"Authorization":"Basic "+auth}});
+        const r=await fetch(`/.netlify/functions/check-status?external_reference=${encodeURIComponent(reference)}`);
         const t=await r.text();let d;try{d=JSON.parse(t)}catch{d={}};
         let success=false;let receipt='';
         if(d.ResultCode===0)success=true;
@@ -6079,39 +6100,64 @@ window.confirmFlowerPayment = async function(){
   const reference = 'FLOWER-'+Date.now()+'-'+data.profile.name+'-'+data.total;
   try{
     let res;
-    try{ res = await fetch('/.netlify/functions/pay', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount: data.total, phone_number: mpesaPhone, external_reference: reference})}); }catch(e){ res={ok:true, text: async()=>JSON.stringify({status:'success'})}; }
+    // Bug fix: this used to swallow a real network failure and pretend the
+    // payment succeeded (res={ok:true,...}), which both lied to the user
+    // and, if anything below then threw, could leave this full-screen
+    // overlay stuck open forever - blocking every tap on the app behind it,
+    // including opening chat. Now a network failure is shown as a real error.
+    try{
+      res = await fetch('/.netlify/functions/pay', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount: data.total, phone_number: mpesaPhone, external_reference: reference})});
+    }catch(networkErr){
+      statusEl.innerText='❌ Haikuweza kufikia server. Angalia internet yako.';
+      statusEl.style.color='#ef4444';
+      btn.disabled=false; btn.innerText='💖 Lipa Sasa';
+      return;
+    }
     const txt = await res.text();
     if(!res.ok){ statusEl.innerText='❌ '+txt.substring(0,150); statusEl.style.color='#ef4444'; btn.disabled=false; btn.innerText='💖 Lipa Sasa'; return; }
-    
+
     statusEl.innerText='✅ STK IMETUMWA kwa +'+mpesaPhone+'! Weka PIN! Maua '+data.quantity+' yataenda!';
     statusEl.style.color='#22c55e';
     btn.innerText='⏳ Subiri PIN...';
-    
+
     setTimeout(()=>{
-      let gifts = JSON.parse(localStorage.getItem('wapoa_flower_gifts')||'[]');
-      data.flowers.forEach(f=>{
-        gifts.push({from: data.buyerPhone, to: data.profile.phone||data.profile.name, toName: data.profile.full||data.profile.name, amount: f.amount, quantity:1, total:f.amount, emoji:f.emoji, message:data.message, time:Date.now()});
-      });
-      localStorage.setItem('wapoa_flower_gifts', JSON.stringify(gifts));
-      
-      let wallet = JSON.parse(localStorage.getItem('wapoa_wallet_'+(data.profile.phone||data.profile.name))||'{}');
-      wallet.totalRoses = (wallet.totalRoses||0) + data.quantity;
-      wallet.totalKes = (wallet.totalKes||0) + data.total;
-      localStorage.setItem('wapoa_wallet_'+(data.profile.phone||data.profile.name), JSON.stringify(wallet));
-      
-      document.getElementById('flowerPaywall').style.display='none';
-      alert('✅ MAUA IMETUMWA!\n\n'+data.emoji+' - '+data.quantity+' maua tofauti\n'+data.flowers.map(f=>f.emoji+' '+f.amount+' KES').join('\n')+'\nJumla: '+data.total+' KES\nKwa: '+(data.profile.full||data.profile.name)+'\nUjumbe: '+data.message+'\n\nAsante!');
-      
-      // Clear selection
-      window.selectedFlowers=[];
-      window.selectedFlowerAmount=0;
-      document.querySelectorAll('.flower-card').forEach(c=>c.classList.remove('selected'));
-      document.getElementById('buyFlowerBtn').style.display='none';
-      document.getElementById('flowerTotal').innerText='Chagua maua - unaweza chagua mengi!';
-      
-      if(typeof trackFirstPayment==='function') trackFirstPayment(data.total, 'flower');
-      btn.disabled=false; btn.innerText='💖 Lipa Sasa';
-      if(typeof showFlowerHistory==='function') showFlowerHistory();
+      // Bug fix: none of this was wrapped in try/catch before. If any line
+      // here threw (e.g. a page element missing because the user navigated
+      // away while waiting), the paywall never reached the hide() call and
+      // stayed stuck on screen, invisible-blocking every click behind it.
+      // Wrapping in try/finally guarantees the overlay always closes.
+      try{
+        let gifts = JSON.parse(localStorage.getItem('wapoa_flower_gifts')||'[]');
+        data.flowers.forEach(f=>{
+          gifts.push({from: data.buyerPhone, to: data.profile.phone||data.profile.name, toName: data.profile.full||data.profile.name, amount: f.amount, quantity:1, total:f.amount, emoji:f.emoji, message:data.message, time:Date.now()});
+        });
+        localStorage.setItem('wapoa_flower_gifts', JSON.stringify(gifts));
+
+        let wallet = JSON.parse(localStorage.getItem('wapoa_wallet_'+(data.profile.phone||data.profile.name))||'{}');
+        wallet.totalRoses = (wallet.totalRoses||0) + data.quantity;
+        wallet.totalKes = (wallet.totalKes||0) + data.total;
+        localStorage.setItem('wapoa_wallet_'+(data.profile.phone||data.profile.name), JSON.stringify(wallet));
+
+        alert('✅ MAUA IMETUMWA!\n\n'+data.emoji+' - '+data.quantity+' maua tofauti\n'+data.flowers.map(f=>f.emoji+' '+f.amount+' KES').join('\n')+'\nJumla: '+data.total+' KES\nKwa: '+(data.profile.full||data.profile.name)+'\nUjumbe: '+data.message+'\n\nAsante!');
+
+        // Clear selection
+        window.selectedFlowers=[];
+        window.selectedFlowerAmount=0;
+        document.querySelectorAll('.flower-card').forEach(c=>c.classList.remove('selected'));
+        const buyBtn = document.getElementById('buyFlowerBtn');
+        if(buyBtn) buyBtn.style.display='none';
+        const totalTxt = document.getElementById('flowerTotal');
+        if(totalTxt) totalTxt.innerText='Chagua maua - unaweza chagua mengi!';
+
+        if(typeof trackFirstPayment==='function') trackFirstPayment(data.total, 'flower');
+        if(typeof showFlowerHistory==='function') showFlowerHistory();
+      }catch(err){
+        console.error('Flower gift post-payment step failed:', err);
+      }finally{
+        const wall = document.getElementById('flowerPaywall');
+        if(wall) wall.style.display='none';
+        btn.disabled=false; btn.innerText='💖 Lipa Sasa';
+      }
     }, 3500);
   }catch(e){
     statusEl.innerText='❌ Error: '+e.message; statusEl.style.color='#ef4444'; btn.disabled=false; btn.innerText='💖 Lipa Sasa';
@@ -6500,7 +6546,8 @@ window.confirmConfessionReplyPayment = async function(){
   
   try{
     let res;
-    try{ res = await fetch('/.netlify/functions/pay', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount:20, phone_number: mpesaPhone, external_reference:'CONFESSION_REPLY-'+Date.now()+'-'+data.id})}); }catch(e){ res={ok:true, text: async()=>JSON.stringify({status:'success'})}; }
+    // Bug fix: no longer fakes success on a network failure - see confirmClubPayment for why.
+    res = await fetch('/.netlify/functions/pay', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount:20, phone_number: mpesaPhone, external_reference:'CONFESSION_REPLY-'+Date.now()+'-'+data.id})});
     const txt = await res.text();
     if(!res.ok){ statusEl.innerText='❌ '+txt.substring(0,100); statusEl.style.color='#ef4444'; btn.disabled=false; btn.innerText='💜 Lipa 20 KES'; return; }
     
@@ -7463,20 +7510,19 @@ window.confirmClubPayment = async function(){
   const reference = 'CLUB-'+Date.now()+'-'+data.name;
   try{
     let res;
-    try{
-      res = await fetch('/.netlify/functions/pay', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({amount: 100, phone_number: mpesaPhone, external_reference: reference})
-      });
-    }catch(e){
-      console.log('Pay demo mode', e);
-      res = {ok: true, text: async()=>JSON.stringify({status:'success', message:'STK sent demo'})};
-    }
-    
-    let txt = '';
-    try{ txt = await res.text(); }catch(e){ txt='{"status":"success"}'; }
-    
+    // Bug fix: this used to catch a real network failure and fake a
+    // success response, which could tell the user their club was
+    // initiated (and let them proceed) when no payment was ever made.
+    // Removing the fake-success fallback lets a genuine network error
+    // propagate to this function's outer catch, which shows a real error.
+    res = await fetch('/.netlify/functions/pay', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({amount: 100, phone_number: mpesaPhone, external_reference: reference})
+    });
+
+    const txt = await res.text();
+
     if(!res.ok){
       statusEl.innerText='❌ Malipo yameshindwa: '+txt.substring(0,150);
       statusEl.style.color='#ef4444';
@@ -7787,7 +7833,8 @@ window.confirmPhotoUnlock = async function(index, amount){
   
   try{
     let res;
-    try{ res = await fetch('/.netlify/functions/pay', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount, phone_number: mpesaPhone, external_reference:'PHOTO-'+Date.now()+'-'+index})}); }catch(e){ res={ok:true, text: async()=>'{\"status\":\"success\"}'}; }
+    // Bug fix: no longer fakes success on a network failure - see confirmClubPayment for why.
+    res = await fetch('/.netlify/functions/pay', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount, phone_number: mpesaPhone, external_reference:'PHOTO-'+Date.now()+'-'+index})});
     const txt = await res.text();
     if(!res.ok){ statusEl.innerText='❌ '+txt.substring(0,100); btn.disabled=false; btn.innerText='💖 Lipa '+amount+' KES'; return; }
     
@@ -7874,7 +7921,8 @@ window.confirmPremium = async function(){
   
   try{
     let res;
-    try{ res = await fetch('/.netlify/functions/pay', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount:500, phone_number: mpesaPhone, external_reference:'PREMIUM-'+Date.now()})}); }catch(e){ res={ok:true, text: async()=>'{\"status\":\"success\"}'}; }
+    // Bug fix: no longer fakes success on a network failure - see confirmClubPayment for why.
+    res = await fetch('/.netlify/functions/pay', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount:500, phone_number: mpesaPhone, external_reference:'PREMIUM-'+Date.now()})});
     const txt = await res.text();
     if(!res.ok){ statusEl.innerText='❌ '+txt.substring(0,100); btn.disabled=false; btn.innerText='👑 Lipa 500 KES'; return; }
     
@@ -8008,21 +8056,27 @@ window.confirmWithdraw = async function(withdrawable, totalKes){
   
   try{
     let res;
-    try{
-      res = await fetch('/.netlify/functions/b2c-withdraw', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          phone: mpesaPhone,
-          amount: withdrawable,
-          total: totalKes,
-          commission: totalKes - withdrawable,
-          account: localStorage.getItem('wapoa_current_user')
-        })
-      });
-    }catch(e){
-      res={ok:true, text: async()=>JSON.stringify({status:'success', message:'B2C sent demo'})};
-    }
+    // Two bugs fixed here, both serious:
+    // 1) This was calling /.netlify/functions/b2c-withdraw, which doesn't
+    //    exist anywhere in this project - every real withdrawal request
+    //    always 404'd.
+    // 2) The 404/network failure was then caught and faked as a success,
+    //    which set the user's wallet (wallet.totalKes, wallet.totalRoses)
+    //    to ZERO below as if the payout had gone through - even though no
+    //    money was ever sent. That's real earnings being wiped for nothing.
+    // Now this calls the withdraw function that actually exists, and a
+    // real failure is shown as a real failure instead of erasing balance.
+    // IMPORTANT: withdraw.js itself is still a stub - it does not yet make
+    // a real M-Pesa B2C payout, it just returns a success message. Wiring
+    // up a real disbursement call needs your PayHero B2C credentials/setup.
+    res = await fetch('/.netlify/functions/withdraw', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        phone: mpesaPhone,
+        amount: withdrawable
+      })
+    });
     const txt = await res.text();
     if(!res.ok){ statusEl.innerText='❌ '+txt.substring(0,150); btn.disabled=false; btn.innerText='💰 Withdraw '+withdrawable+' KES'; return; }
     
@@ -8642,18 +8696,13 @@ window.initiateC2BPayment = async function(amount, phone, reference, type){
   };
   
   try{
-    let res;
-    try{
-      res = await fetch('/.netlify/functions/pay', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-    }catch(e){
-      console.log('C2B demo mode', e);
-      res = {ok:true, text: async()=>JSON.stringify({status:'success', CheckoutRequestID:'demo-'+Date.now()})};
-    }
-    
+    // Bug fix: no longer fakes success on a network failure - see confirmClubPayment for why.
+    const res = await fetch('/.netlify/functions/pay', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+
     const txt = await res.text();
     console.log('C2B response', txt);
     return {success: res.ok, data: txt};
@@ -8675,18 +8724,14 @@ window.initiateB2CWithdrawal = async function(phone, amount, type){
   };
   
   try{
-    let res;
-    try{
-      res = await fetch('/.netlify/functions/b2c-withdraw', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-    }catch(e){
-      console.log('B2C demo mode', e);
-      res = {ok:true, text: async()=>JSON.stringify({status:'success', ConversationID:'b2c-demo-'+Date.now()})};
-    }
-    
+    // Bug fix: pointed at /.netlify/functions/withdraw (the function that
+    // actually exists) and no longer fakes success on network failure.
+    const res = await fetch('/.netlify/functions/withdraw', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+
     const txt = await res.text();
     console.log('B2C response', txt);
     return {success: res.ok, data: txt};
@@ -8756,10 +8801,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
               <button onclick="toggleLanguage()" style="background:#1e121e;border:1px solid #3a2040;color:#fff;padding:10px;border-radius:12px;font-size:10px;font-weight:800">🌐 Lang: ${window.currentLang.toUpperCase()}</button>
             </div>
             <div style="margin-top:12px;padding:10px;background:#120a12;border-radius:10px">
-              <div style="font-size:10px;color:#888">M-Pesa Paybill: <b style="color:#22c55e">${window.MPESA_CONFIG.paybill}</b> (B2C & C2B Automatic)</div>
-              <div style="font-size:9px;color:#666;margin-top:4px">C2B: Paybill Payment - User → Paybill 4166110</div>
-              <div style="font-size:9px;color:#666">B2C: Withdrawal - System → User M-Pesa - Automatic!</div>
-              <div style="font-size:9px;color:#22c55e;margin-top:4px">✅ Ready for Safaricom - Kesho ukienda utapewa Consumer Key/Secret!</div>
+              <div style="font-size:10px;color:#888;text-align:center">For support WhatsApp: <b style="color:#22c55e">0757363380</b></div>
             </div>
           </div>
         `;
@@ -9938,7 +9980,8 @@ window.confirmReveal = async function(replyId){
   statusEl.innerText='⏳ STK Push 1 KES kwa +'+mpesaPhone+'... Weka PIN!';
   try{
     let res;
-    try{ res = await fetch('/.netlify/functions/pay', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount: 1, phone_number: mpesaPhone, external_reference:'REVEAL-'+replyId})}); }catch(e){ res={ok:true, text: async()=>JSON.stringify({status:'success'})}; }
+    // Bug fix: no longer fakes success on a network failure - see confirmClubPayment for why.
+    res = await fetch('/.netlify/functions/pay', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount: 1, phone_number: mpesaPhone, external_reference:'REVEAL-'+replyId})});
     const txt = await res.text();
     if(!res.ok){ statusEl.innerText='❌ '+txt.substring(0,100); btn.disabled=false; btn.innerText='🔓 Lipa 1 KES'; return; }
     statusEl.innerText='✅ STK IMETUMWA! Weka PIN - 1 bob tu!'; statusEl.style.color='#22c55e';
